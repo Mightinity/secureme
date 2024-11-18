@@ -22,8 +22,20 @@ CREATE_USER=${CREATE_USER:-Y} # Default to Y if empty
 
 if [[ "$CREATE_USER" =~ ^[Yy]$ ]]; then
     read -p "Enter the new username: " NEW_USER
-    read -s -p "Enter the password for the new user: " NEW_PASSWORD
-    echo
+
+    # Prompt for password and confirm password
+    while true; do
+        read -s -p "Enter the password for the new user: " NEW_PASSWORD
+        echo
+        read -s -p "Confirm the password: " CONFIRM_PASSWORD
+        echo
+
+        if [[ "$NEW_PASSWORD" == "$CONFIRM_PASSWORD" ]]; then
+            break
+        else
+            echo "Passwords do not match. Please try again."
+        fi
+    done
 
     # Create a new user
     if id "$NEW_USER" &>/dev/null; then
@@ -162,23 +174,39 @@ if [[ "$USE_FIREWALL" =~ ^[Yy]$ ]]; then
 	fi
 
 	read -p "Do you want to whitelist all Indonesian IPs? [Y/n]: " CONFIRM_IPS
-	CONFIRM_IPS=${CONFIRM_IPS:-Y}	# Default to Y if empty
+	CONFIRM_IPS=${CONFIRM_IPS:-Y} # Default to Y if empty
+
 	if [[ "$CONFIRM_IPS" =~ ^[Yy]$ ]]; then
 		echo "Whitelisting..."
 		INFO_CONFIRMS_IPS="Yes"
-		DATA_FILE="data.txt"
-		if [ ! -f "$DATA_FILE" ]; then
-			echo "File $DATA_FILE not found. Please ensure the file exists in the same directory."
+		
+		# URL lokasi file subnet
+		DATA_URL="https://raw.githubusercontent.com/Mightinity/secureme/refs/heads/main/Subnets/indonesian_subnet.txt"
+
+		# Mengecek apakah curl atau wget tersedia
+		if command -v curl &> /dev/null; then
+			DATA=$(curl -s "$DATA_URL")
+		elif command -v wget &> /dev/null; then
+			DATA=$(wget -qO- "$DATA_URL")
+		else
+			echo "Neither curl nor wget is installed. Please install one to continue."
 			exit 1
 		fi
 
-		while IFS= read -r subnet; do
+		# Jika DATA kosong, gagal mengambil file
+		if [[ -z "$DATA" ]]; then
+			echo "Failed to retrieve data from $DATA_URL. Please check your internet connection or URL."
+			exit 1
+		fi
+
+		# Membaca setiap subnet dari data yang diunduh
+		echo "$DATA" | while IFS= read -r subnet; do
 			if [[ -n "$subnet" ]]; then
 				iptables -A INPUT -s "$subnet" -j ACCEPT
 				iptables -A INPUT -s "$subnet" -j LOG --log-prefix "WHITELISTED SUBNET BLOCKED: " --log-level 4
 				# echo "Whitelisted subnet: $subnet"
 			fi
-		done < "$DATA_FILE"
+		done
 	else
 		INFO_CONFIRMS_IPS="No"
 	fi
