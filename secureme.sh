@@ -214,10 +214,39 @@ generate_ssh_key() {
     echo "You must distribute the private key securely to the user."
 }
 
-
-
 # Function to configure SSH
+install_ssh() {
+    echo "Installing OpenSSH Server..."
+    local pkg_manager=$(get_package_manager)
+
+    case $pkg_manager in
+        apt)
+            apt update && apt install -y openssh-server
+            ;;
+        yum)
+            yum install -y openssh-server
+            systemctl enable sshd
+            ;;
+        pacman)
+            pacman -Sy --noconfirm openssh
+            systemctl enable sshd
+            ;;
+        *)
+            echo "Unsupported package manager. Please install OpenSSH Server manually."
+            exit 1
+            ;;
+    esac
+    systemctl start sshd
+    echo "OpenSSH Server installed and started."
+}
+
 configure_ssh() {
+    # Check if SSH is installed
+    if ! command -v sshd &>/dev/null; then
+        echo "OpenSSH Server is not installed."
+        install_ssh
+    fi
+
     echo "SSH Configuration:"
     echo "1. Disable root login for SSH"
     echo "2. Change SSH port"
@@ -225,6 +254,7 @@ configure_ssh() {
     echo "4. Generate SSH Key"
     echo "5. Back to main menu"
     read -p "Enter your choice: " SSH_CHOICE
+
     case $SSH_CHOICE in
         1)
             disable_root_ssh
