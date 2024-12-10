@@ -167,10 +167,28 @@ create_user() {
     fi
 }
 
-generate_ssh_key() {
-    echo "Configuring SSH to use key-based authentication..."
+# Function to enable key-based SSH login
+enable_key_based_ssh() {
+    echo "Enabling SSH login using key-based authentication only..."
+    read -p "Have you already generated and distributed SSH keys? [Y/n]: " HAS_KEYS
+    HAS_KEYS=${HAS_KEYS:-Y} # Default to 'Y'
 
-    # Generate SSH key pair
+    if [[ "$HAS_KEYS" =~ ^[Nn]$ ]]; then
+        echo "Please generate SSH keys first using the 'Generate SSH Key' option."
+        return
+    fi
+
+    # Update sshd_config to disable password authentication
+    sed -i "s/^#PasswordAuthentication.*/PasswordAuthentication no/" /etc/ssh/sshd_config
+    sed -i "s/^PasswordAuthentication.*/PasswordAuthentication no/" /etc/ssh/sshd_config
+    systemctl restart sshd
+
+    echo "SSH login has been configured to use key-based authentication only."
+}
+
+# Function to generate SSH key
+generate_ssh_key() {
+    echo "Generating SSH key pair..."
     read -p "Enter the username for SSH key generation: " SSH_USER
     if ! id "$SSH_USER" &>/dev/null; then
         echo "User $SSH_USER does not exist. Please create the user first."
@@ -191,14 +209,11 @@ generate_ssh_key() {
     chmod 600 "$USER_HOME/.ssh/authorized_keys"
     chown -R "$SSH_USER:$SSH_USER" "$USER_HOME/.ssh"
 
-    # Update sshd_config to disable password authentication
-    sed -i "s/^#PasswordAuthentication.*/PasswordAuthentication no/" /etc/ssh/sshd_config
-    sed -i "s/^PasswordAuthentication.*/PasswordAuthentication no/" /etc/ssh/sshd_config
-    systemctl restart sshd
-
-    echo "SSH configured to use key-based authentication for $SSH_USER."
+    echo "SSH key for $SSH_USER has been generated and added to authorized_keys."
     echo "Private key file: $KEY_FILE"
+    echo "You must distribute the private key securely to the user."
 }
+
 
 
 # Function to configure SSH
@@ -206,8 +221,9 @@ configure_ssh() {
     echo "SSH Configuration:"
     echo "1. Disable root login for SSH"
     echo "2. Change SSH port"
-    echo "3. Configure SSH to use key-based authentication"
-    echo "4. Back to main menu"
+    echo "3. Enable SSH login only using key-based authentication"
+    echo "4. Generate SSH Key"
+    echo "5. Back to main menu"
     read -p "Enter your choice: " SSH_CHOICE
     case $SSH_CHOICE in
         1)
@@ -217,9 +233,12 @@ configure_ssh() {
             change_ssh_port
             ;;
         3)
-            generate_ssh_key
+            enable_key_based_ssh
             ;;
         4)
+            generate_ssh_key
+            ;;
+        5)
             return
             ;;
         *)
